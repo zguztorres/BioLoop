@@ -197,10 +197,12 @@ if st.button(t["btn"]):
             st.success(t["found"])
             
             df_mostrar = resultado_local.copy()
-            
+
             if idioma_seleccionado == "EN":
+                # 1. Traducir la columna principal
                 df_mostrar['Residue'] = df_mostrar['Residue'].map(TRADUCCION_RESIDUOS_EN).fillna(df_mostrar['Residue'])
                 
+                # 2. Traducir los encabezados de las columnas
                 df_mostrar = df_mostrar.rename(columns={
                     "Key_Component": "Key Component",
                     "Suggested_Enzyme": "Suggested Enzyme",
@@ -208,6 +210,26 @@ if st.button(t["btn"]):
                     "Final_Product": "Final Product",
                     "Justification": "Justification"
                 })
+                
+                # 3. Traducir las palabras clave cortas (estas no fallan)
+                TRAD_CELDAS = {
+                    "Pectina": "Pectin", "Pectinasa": "Pectinase", "Limoneno": "Limonene",
+                    "Celulosa": "Cellulose", "Celulasa": "Cellulase", "Etanol": "Ethanol"
+                }
+                df_mostrar = df_mostrar.replace(TRAD_CELDAS)
+                
+                # 4. SOLUCIÓN ROBUSTA PARA LA JUSTIFICACIÓN
+                # Asignamos la frase en inglés directamente al residuo ya traducido
+                JUSTIFICACIONES_EN = {
+                    "Orange Peel": "High conversion rate to limonene due to pectin richness.",
+                    "Grape Pomace": "Optimal lignocellulosic profile for synthesizing advanced biofuels.",
+                    "Sugarcane Bagasse": "High cellulose content for efficient enzymatic degradation.",
+                    "Dairy Whey": "Lactose-rich medium perfect for engineered yeast chassis.",
+                    "Coffee Husk": "Abundant source for valuable organic acid recovery."
+                }
+                
+                # Esto busca qué residuo está en la tabla y le pega su frase en inglés
+                df_mostrar['Justification'] = df_mostrar['Residue'].map(JUSTIFICACIONES_EN).fillna(df_mostrar['Justification'])
                 
                 # --- AQUÍ ESTÁ EL MINI-DICCIONARIO ACTUALIZADO ---
                 TRAD_CELDAS = {

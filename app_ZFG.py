@@ -202,3 +202,32 @@ else:
         residuo_input = opcion_elegida
 
 # --- FIN DEL NUEVO SISTEMA ---
+
+# --- LÓGICA DE EJECUCIÓN (BOTÓN Y RESULTADOS) ---
+st.write("---")
+
+# Dibujamos el botón usando tu diccionario bilingüe
+if st.button(t["btn"]):
+    # Validar que no esté vacío
+    if not residuo_input or residuo_input.strip() == "":
+        st.warning(t["warn"])
+    else:
+        # 1. Buscar primero en tu base de datos local (CSV)
+        resultado_local = df[df['Residue'].str.lower() == residuo_input.lower()]
+        
+        if not resultado_local.empty:
+            st.success(t["found"])
+            st.dataframe(resultado_local) # Muestra los datos del CSV
+            
+        else:
+            # 2. Si no está en el CSV, despertamos a la IA
+            with st.spinner(t["inferring"]):
+                respuesta_ia = inferir_con_ia(residuo_input, t["ai_prompt"])
+                
+                if respuesta_ia:
+                    # Mostrar la estructura JSON devuelta por la IA
+                    st.json(respuesta_ia)
+                    # Mostrar la justificación bonita
+                    st.info(f"**{t['justification']}** {respuesta_ia.get('Justification', '')}")
+                else:
+                    st.error("❌ Error de comunicación con el Agente. Intenta de nuevo.")

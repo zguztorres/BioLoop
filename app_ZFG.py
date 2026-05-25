@@ -204,6 +204,8 @@ else:
 # --- FIN DEL NUEVO SISTEMA ---
 
 # --- LÓGICA DE EJECUCIÓN (BOTÓN Y RESULTADOS) ---
+
+    # --- LÓGICA DE EJECUCIÓN (BOTÓN Y RESULTADOS) ---
 st.write("---")
 
 # Dibujamos el botón usando tu diccionario bilingüe
@@ -217,7 +219,32 @@ if st.button(t["btn"]):
         
         if not resultado_local.empty:
             st.success(t["found"])
-            st.dataframe(resultado_local) # Muestra los datos del CSV
+            
+            # --- CAPA DE TRADUCCIÓN DEL DATAFRAME ---
+            df_mostrar = resultado_local.copy()
+            
+            if idioma_seleccionado == "EN":
+                # 1. Traducir la columna principal usando el diccionario que ya tenemos arriba
+                df_mostrar['Residue'] = df_mostrar['Residue'].map(TRADUCCION_RESIDUOS_EN).fillna(df_mostrar['Residue'])
+                
+                # 2. Traducir los encabezados de las columnas para que se vean profesionales
+                df_mostrar = df_mostrar.rename(columns={
+                    "Key_Component": "Key Component",
+                    "Suggested_Enzyme": "Suggested Enzyme",
+                    "Target_Chassis": "Target Chassis",
+                    "Final_Product": "Final Product",
+                    "Justification": "Justification"
+                })
+                
+                # 3. Mini-diccionario para traducir las palabras clave de biología de tu CSV
+                TRAD_CELDAS = {
+                    "Pectina": "Pectin", "Pectinasa": "Pectinase", "Limoneno": "Limonene",
+                    "Celulosa": "Cellulose", "Celulasa": "Cellulase", "Etanol": "Ethanol"
+                }
+                df_mostrar = df_mostrar.replace(TRAD_CELDAS)
+            
+            # Mostramos el dataframe limpio y sin el número de índice a la izquierda
+            st.dataframe(df_mostrar, hide_index=True)
             
         else:
             # 2. Si no está en el CSV, despertamos a la IA
@@ -225,9 +252,7 @@ if st.button(t["btn"]):
                 respuesta_ia = inferir_con_ia(residuo_input, t["ai_prompt"])
                 
                 if respuesta_ia:
-                    # Mostrar la estructura JSON devuelta por la IA
                     st.json(respuesta_ia)
-                    # Mostrar la justificación bonita
                     st.info(f"**{t['justification']}** {respuesta_ia.get('Justification', '')}")
                 else:
                     st.error("❌ Error de comunicación con el Agente. Intenta de nuevo.")

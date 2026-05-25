@@ -16,13 +16,18 @@ from dotenv import load_dotenv
 load_dotenv() 
 
 # 1. CONFIGURACIÓN VISUAL (Estética Sci-Fi)
+# 1. CONFIGURACIÓN VISUAL (Estética Sci-Fi)
 st.set_page_config(page_title="BioLoop Engine | ZFG", page_icon="🧬", layout="centered")
+
 st.markdown("""
     <style>
     .stApp { background-color: #0a0a0f; color: #d1d5db; }
     h1, h2, h3 { color: #00ff41; font-family: 'Courier New', Courier, monospace; }
     .stButton>button { color: #00ff41; border: 1px solid #00ff41; background-color: transparent; width: 100%; }
     .stButton>button:hover { background-color: #00ff41; color: #0a0a0f; }
+    
+    /* NUEVO: Ocultar el texto de Press Enter */
+    div[data-testid="InputInstructions"] { display: none !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -52,6 +57,7 @@ df = cargar_datos()
 lista_residuos = df['Residue'].tolist()
 
 # 3. SISTEMA DE IDIOMAS (DICCIONARIO)
+# 3. SISTEMA DE IDIOMAS (DICCIONARIO)
 LANG = {
     "ES": {
         "title_main": "Bioparts",
@@ -67,7 +73,8 @@ LANG = {
         "justification": "Justificación Científica:",
         "download": "📥 Descargar Bio-Parte (.fasta)",
         "warn": "⚠️ Por favor, introduce un residuo.",
-        "ai_prompt": "Responde estrictamente en ESPAÑOL."
+        "ai_prompt": "Responde estrictamente en ESPAÑOL.",
+        "tip": "💡 **Tip:** Si tu residuo no está en la lista principal, selecciona la última opción ('✍️ + Escribir otro...') para analizarlo con nuestro Agente de IA."
     },
     "EN": {
         "title_main": "Bioparts",
@@ -83,10 +90,10 @@ LANG = {
         "justification": "Scientific Justification:",
         "download": "📥 Download Bio-Part (.fasta)",
         "warn": "⚠️ Please, enter a residue.",
-        "ai_prompt": "Respond strictly in ENGLISH."
+        "ai_prompt": "Respond strictly in ENGLISH.",
+        "tip": "💡 **Tip:** If your residue is not in the main list, select the last option ('✍️ + Type a new custom residue...') to analyze it with our AI Agent."
     }
 }
-
 idioma_seleccionado = st.radio("Language / Idioma", ["EN", "ES"], horizontal=True)
 t = LANG[idioma_seleccionado]
 
@@ -226,7 +233,7 @@ else:
     residuo_input = TRADUCCION_INVERSA.get(opcion_elegida, opcion_elegida) if idioma_seleccionado == "EN" else opcion_elegida
 
 # --- LÓGICA DE EJECUCIÓN ---
-st.write("---")
+st.caption(t["tip"])
 
 if st.button(t["btn"]):
     if not residuo_input.strip():

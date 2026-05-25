@@ -56,6 +56,7 @@ df = cargar_datos()
 lista_residuos = df['Residue'].tolist()
 
 # 3. SISTEMA DE IDIOMAS (DICCIONARIO)
+# 3. SISTEMA DE IDIOMAS (DICCIONARIO)
 LANG = {
     "ES": {
         "title_main": "Bioparts",
@@ -72,7 +73,12 @@ LANG = {
         "download": "📥 Descargar Bio-Parte (.fasta)",
         "warn": "⚠️ Por favor, introduce un residuo.",
         "ai_prompt": "Responde estrictamente en ESPAÑOL.",
-        "tip": "💡 **Tip:** Si tu residuo no está en la lista principal, selecciona la última opción ('✍️ + Escribir otro...') para analizarlo con nuestro Agente de IA."
+        "tip": "💡 **Tip:** Si tu residuo no está en la lista principal, selecciona la última opción ('✍️ + Escribir otro...') para analizarlo con nuestro Agente de IA.",
+        "synth": "🧬 **Sintetizando Bio-Parte...**",
+        "success_dna": "✅ Secuencia genética generada y optimizada.",
+        "err_codon": "❌ Error en la optimización de codones.",
+        "err_uniprot": "❌ No se pudo descargar la secuencia desde UniProt.",
+        "err_agent": "❌ Error de comunicación con el Agente. Intenta de nuevo."
     },
     "EN": {
         "title_main": "Bioparts",
@@ -89,7 +95,12 @@ LANG = {
         "download": "📥 Download Bio-Part (.fasta)",
         "warn": "⚠️ Please, enter a residue.",
         "ai_prompt": "Respond strictly in ENGLISH.",
-        "tip": "💡 **Tip:** If your residue is not in the main list, select the last option ('✍️ + Type a new custom residue...') to analyze it with our AI Agent."
+        "tip": "💡 **Tip:** If your residue is not in the main list, select the last option ('✍️ + Type a new custom residue...') to analyze it with our AI Agent.",
+        "synth": "🧬 **Synthesizing Bio-Part...**",
+        "success_dna": "✅ Genetic sequence generated and optimized.",
+        "err_codon": "❌ Error in codon optimization.",
+        "err_uniprot": "❌ Could not download the sequence from UniProt.",
+        "err_agent": "❌ Communication error with the Agent. Please try again."
     }
 }
 
@@ -281,7 +292,7 @@ if st.button(t["btn"]):
                     
                     if uniprot_id and uniprot_id not in ["ID_Real", "Desconocido"]:
                         st.write("---")
-                        st.write("🧬 **Sintetizando Bio-Parte...**")
+                        st.write(t["synth"])
                         
                         secuencia_prot, desc = obtener_secuencia_uniprot(uniprot_id)
                         
@@ -290,7 +301,7 @@ if st.button(t["btn"]):
                             
                             if secuencia_adn:
                                 fasta_content = f">{uniprot_id} | Optimized for {chasis} | BioLoop Engine\n{secuencia_adn}"
-                                st.success("✅ Secuencia genética generada y optimizada.")
+                                st.success(t["success_dna"])
                                 st.download_button(
                                     label=t["download"],
                                     data=fasta_content,
@@ -298,8 +309,8 @@ if st.button(t["btn"]):
                                     mime="text/plain"
                                 )
                             else:
-                                st.error("❌ Error en la optimización de codones.")
+                                st.error(t["err_codon"])
                         else:
-                            st.error("❌ No se pudo descargar la secuencia desde UniProt.")
+                            st.error(t["err_uniprot"])
                 else:
-                    st.error("❌ Error de comunicación con el Agente. Intenta de nuevo.")
+                    st.error(t["err_agent"])

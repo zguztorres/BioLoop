@@ -9,7 +9,7 @@ from openai import OpenAI
 from Bio import SeqIO
 from dnachisel import DnaOptimizationProblem, CodonOptimize
 from dnachisel.biotools import reverse_translate
-from dotenv import load_dotenv # NUEVO: Importamos el gestor de secretos
+from dotenv import load_dotenv
 
 # Cargar las variables secretas desde el archivo .env
 load_dotenv() 
@@ -26,7 +26,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 2. CONFIGURACIÓN DEL BACKEND (AHORA SEGURO 🔒)
-# Ya no hay hardcoding. Python lee el token de forma invisible.
 token_seguro = os.getenv("GITHUB_TOKEN")
 
 if not token_seguro:
@@ -37,7 +36,6 @@ cliente_ia = OpenAI(
     base_url="https://models.inference.ai.azure.com", 
     api_key=token_seguro
 )
-
 
 MAPEO_CHASIS = {
     "pseudomonas putida": "p_putida",
@@ -53,7 +51,6 @@ df = cargar_datos()
 lista_residuos = df['Residue'].tolist()
 
 # 3. SISTEMA DE IDIOMAS (DICCIONARIO)
-# Actualizamos el diccionario para separar el título gigante del subtítulo
 LANG = {
     "ES": {
         "title_main": "Bioparts",
@@ -91,7 +88,7 @@ LANG = {
 
 # Selector de Idioma en la interfaz
 idioma_seleccionado = st.radio("Language / Idioma", ["EN", "ES"], horizontal=True)
-t = LANG[idioma_seleccionado] # 't' contiene todos los textos en el idioma elegido
+t = LANG[idioma_seleccionado]
 
 # Funciones Biológicas
 def obtener_secuencia_uniprot(uniprot_id):
@@ -114,23 +111,17 @@ def optimizar_con_dnachisel(secuencia_proteina, chasis_nombre):
         return None
 
 def sanitizar_input(texto):
-    """Escudo Nivel 1: Limpia el input del usuario para evitar inyecciones."""
-    # 1. Limitar longitud (ningún residuo biológico tiene más de 50 letras)
     texto = texto[:50]
-    # 2. Eliminar caracteres peligrosos (deja solo letras, números y espacios)
     texto_limpio = re.sub(r'[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s]', '', texto)
     return texto_limpio.strip()
 
 def inferir_con_ia(residuo, regla_idioma):
-    """Escudo Nivel 2 y 3: Roles separados y delimitadores."""
-    
     residuo_seguro = sanitizar_input(residuo)
     
     if not residuo_seguro:
         print("⚠️ Input rechazado por el sanitizador.")
         return None
 
-    # El rol SYSTEM contiene las reglas inflexibles del sistema
     instrucciones_sistema = f"""
     Eres un experto en biología sintética y bioeconomía circular.
     Tu única tarea es analizar residuos agroindustriales y proponer una enzima y un chasis.
@@ -140,7 +131,6 @@ def inferir_con_ia(residuo, regla_idioma):
     {{"Enzyme": "Nombre", "UniProt_ID": "ID_Real", "Chassis": "Escherichia coli", "Justification": "Razón corta"}}
     """
     
-    # El rol USER solo contiene los datos, envueltos en delimitadores
     mensaje_usuario = f"Analiza este residuo: ### {residuo_seguro} ###"
 
     try:
@@ -158,7 +148,6 @@ def inferir_con_ia(residuo, regla_idioma):
         return None
 
 # 4. CONSTRUCCIÓN DE LA INTERFAZ
-# Aplicamos HTML directo para controlar el color #deff9a y los tamaños exactos (48px vs 24px)
 st.markdown(f"<h1 style='color: #deff9a; font-size: 48px; margin-bottom: 0;'>{t['title_main']}</h1>", unsafe_allow_html=True)
 st.markdown(f"<h3 style='font-size: 24px; margin-top: 0;'>{t['title_sub']}</h3>", unsafe_allow_html=True)
 
@@ -167,10 +156,7 @@ st.write(t["desc"])
 
 st.write("---")
 
-# Sistema de Autocompletado
-# --- INICIO DEL NUEVO SISTEMA DE AUTOCOMPLETADO BILINGÜE ---
-
-# Pequeño diccionario para traducir los elementos de tu CSV al vuelo
+# Sistema de Autocompletado Bilingüe
 TRADUCCION_RESIDUOS_EN = {
     "Cáscara de Naranja": "Orange Peel",
     "Orujo de Uva": "Grape Pomace",
@@ -179,55 +165,42 @@ TRADUCCION_RESIDUOS_EN = {
     "Cascarilla de Café": "Coffee Husk"
 }
 
-# Invertimos el diccionario para poder buscar el valor original en español después
 TRADUCCION_INVERSA = {v: k for k, v in TRADUCCION_RESIDUOS_EN.items()}
 
-# Traducir la lista visualmente si estamos en inglés
 if idioma_seleccionado == "EN":
     lista_visual = [TRADUCCION_RESIDUOS_EN.get(res, res) for res in lista_residuos]
 else:
     lista_visual = lista_residuos
 
-# El selectbox ahora usa la lista traducida
 opcion_elegida = st.selectbox(t["dropdown"], lista_visual + [t["other"]])
 
 residuo_input = ""
 if opcion_elegida == t["other"]:
     residuo_input = st.text_input(t["manual"], placeholder="Ej: Piña / Pineapple...")
 else:
-    # Si estamos en inglés, devolvemos la palabra a español para que Pandas pueda encontrarla en el CSV
     if idioma_seleccionado == "EN" and opcion_elegida in TRADUCCION_INVERSA:
         residuo_input = TRADUCCION_INVERSA[opcion_elegida]
     else:
         residuo_input = opcion_elegida
 
-# --- FIN DEL NUEVO SISTEMA ---
 
 # --- LÓGICA DE EJECUCIÓN (BOTÓN Y RESULTADOS) ---
-
-    # --- LÓGICA DE EJECUCIÓN (BOTÓN Y RESULTADOS) ---
 st.write("---")
 
-# Dibujamos el botón usando tu diccionario bilingüe
 if st.button(t["btn"]):
-    # Validar que no esté vacío
     if not residuo_input or residuo_input.strip() == "":
         st.warning(t["warn"])
     else:
-        # 1. Buscar primero en tu base de datos local (CSV)
         resultado_local = df[df['Residue'].str.lower() == residuo_input.lower()]
         
         if not resultado_local.empty:
             st.success(t["found"])
             
-            # --- CAPA DE TRADUCCIÓN DEL DATAFRAME ---
             df_mostrar = resultado_local.copy()
             
             if idioma_seleccionado == "EN":
-                # 1. Traducir la columna principal usando el diccionario que ya tenemos arriba
                 df_mostrar['Residue'] = df_mostrar['Residue'].map(TRADUCCION_RESIDUOS_EN).fillna(df_mostrar['Residue'])
                 
-                # 2. Traducir los encabezados de las columnas para que se vean profesionales
                 df_mostrar = df_mostrar.rename(columns={
                     "Key_Component": "Key Component",
                     "Suggested_Enzyme": "Suggested Enzyme",
@@ -236,18 +209,19 @@ if st.button(t["btn"]):
                     "Justification": "Justification"
                 })
                 
-                # 3. Mini-diccionario para traducir las palabras clave de biología de tu CSV
+                # --- AQUÍ ESTÁ EL MINI-DICCIONARIO ACTUALIZADO ---
                 TRAD_CELDAS = {
                     "Pectina": "Pectin", "Pectinasa": "Pectinase", "Limoneno": "Limonene",
-                    "Celulosa": "Cellulose", "Celulasa": "Cellulase", "Etanol": "Ethanol"
+                    "Celulosa": "Cellulose", "Celulasa": "Cellulase", "Etanol": "Ethanol",
+                    # ⚠️ REEMPLAZA EL TEXTO DE ABAJO POR TU JUSTIFICACIÓN EXACTA DEL CSV
+                    "Alta t... (Tu texto original en español)": "High rate of... (Tu traducción al inglés)"
                 }
+                
                 df_mostrar = df_mostrar.replace(TRAD_CELDAS)
             
-            # Mostramos el dataframe limpio y sin el número de índice a la izquierda
             st.dataframe(df_mostrar, hide_index=True)
             
         else:
-            # 2. Si no está en el CSV, despertamos a la IA
             with st.spinner(t["inferring"]):
                 respuesta_ia = inferir_con_ia(residuo_input, t["ai_prompt"])
                 

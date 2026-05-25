@@ -112,37 +112,102 @@ def optimizar_con_dnachisel(secuencia_proteina, chasis_nombre):
         return None
 
 # NUEVA HERRAMIENTA: Conexión a UniProt para el Agente
-def buscar_herramienta_uniprot(compuesto):
-    """
-    Se conecta a la API de UniProt para buscar enzimas reales.
-    Esta es la 'herramienta' que usará la IA cuando no sepa la respuesta.
-    """
-    query_segura = urllib.parse.quote(f"{compuesto} AND reviewed:true AND existence:1")
-    url = f"https://rest.uniprot.org/uniprotkb/search?query={query_segura}&format=json&size=3"
+
+def inferir_con_ia(residuo, regla_idioma):
+    residuo_seguro = sanitizar_input(residuo)
     
+    if not residuo_seguro:
+        print("⚠️ Input rechazado por el sanitizador.")
+        return None
+
+    instrucciones_sistema = f"""
+    Eres un experto en biología sintética. Tu tarea es analizar residuos agroindustriales y proponer una enzima real y un chasis.
+    {regla_idioma}
+    Si no conoces el residuo, DEBES usar la herramienta 'buscar_herramienta_uniprot' para extraer una enzima real antes de responder.
+    Devuelve estrictamente un objeto JSON con esta estructura exacta, sin texto adicional:
+    {{"Enzyme": "Nombre", "UniProt_ID": "ID_Real", "Chassis": "Escherichia coli", "Justification": "Razón corta"}}
+    """
+    
+    mensaje_usuario = f"Analiza este residuo: ### {residuo_seguro} ###"
+
+    # --- CATÁLOGO DE HERRAMIENTAS ---
+    herramientas = [
+        {
+            "type": "function",
+            "function": {
+                "name": "buscar_herramienta_uniprot",
+                "description": "Busca enzimas reales en la base de datos UniProt para un compuesto específico. Devuelve IDs y nombres de enzimas. Úsala siempre que el usuario introduzca un residuo nuevo.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "compuesto": {
+                            "type": "string",
+                            "description": "El nombre del compuesto clave a degradar en inglés (ej. 'pectin', 'cellulose', 'lignin')."
+                        }
+                    },
+                    "required": ["compuesto"]
+                }
+            }
+        }
+    ]
+
+    mensajes_historial = [
+        {"role": "system", "content": instrucciones_sistema},
+        {"role": "user", "content": mensaje_usuario}
+    ]
+
     try:
-        req = urllib.request.Request(url, headers={'Accept': 'application/json'})
-        with urllib.request.urlopen(req) as response:
-            data = json.loads(response.read().decode('utf-8'))
+        # 1. Primera llamada: Le pasamos la pregunta y las herramientas disponibles
+        respuesta = cliente_ia.chat.completions.create(
+            model="gpt-4o", 
+            messages=mensajes_historial,
+            tools=herramientas,
+            tool_choice="auto",
+            temperature=0.1
+        )
+        
+        mensaje_respuesta = respuesta.choices[0].message
+        
+        # 2. Verificamos si la IA decidió usar la herramienta
+        if mensaje_respuesta.tool_calls:
+            # Agregamos la petición de la IA al historial
+            mensajes_historial.append(mensaje_respuesta)
             
-            resultados = []
-            for entry in data.get('results', []):
-                nombre_enzima = "Desconocido"
-                try:
-                    nombre_enzima = entry['proteinDescription']['recommendedName']['fullName']['value']
-                except KeyError:
-                    pass
-                
-                resultados.append({
-                    "UniProt_ID": entry['primaryAccession'],
-                    "Nombre_Enzima": nombre_enzima,
-                    "Organismo": entry.get('organism', {}).get('scientificName', 'Unknown')
-                })
+            # Ejecutamos la herramienta en nuestro Python local
+            for tool_call in mensaje_respuesta.tool_calls:
+                if tool_call.function.name == "buscar_herramienta_uniprot":
+                    # Extraemos la palabra que la IA quiere buscar (ej. "cellulose")
+                    argumentos = json.loads(tool_call.function.arguments)
+                    compuesto_a_buscar = argumentos.get("compuesto", "cellulose")
+                    
+                    # Llamamos a UniProt
+                    resultados_reales = buscar_herramienta_uniprot(compuesto_a_buscar)
+                    
+                    # Le enviamos los datos de UniProt de vuelta a la IA
+                    mensajes_historial.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": tool_call.function.name,
+                        "content": resultados_reales
+                    })
             
-            return json.dumps(resultados) if resultados else "No se encontraron enzimas en UniProt para este compuesto."
-            
+            # 3. Segunda llamada: La IA genera el JSON final usando los datos de UniProt
+            respuesta_final = cliente_ia.chat.completions.create(
+                model="gpt-4o",
+                messages=mensajes_historial,
+                temperature=0.1
+            )
+            resultado_texto = respuesta_final.choices[0].message.content
+        else:
+            # Si la IA ya se lo sabía, responde directamente
+            resultado_texto = mensaje_respuesta.content
+
+        # Limpiamos y devolvemos el JSON final
+        return json.loads(resultado_texto.strip().replace("```json", "").replace("```", ""))
+        
     except Exception as e:
-        return f"Error al consultar UniProt: {str(e)}"
+        print(f"Error en inferencia segura con herramientas: {e}")
+        return None
 
 # --- SEGURIDAD E IA ---
 def sanitizar_input(texto):

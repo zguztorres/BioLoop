@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import json
 import urllib.request
+import urllib.parse
 from io import StringIO
 from openai import OpenAI
 from Bio import SeqIO
@@ -90,7 +91,7 @@ LANG = {
 idioma_seleccionado = st.radio("Language / Idioma", ["EN", "ES"], horizontal=True)
 t = LANG[idioma_seleccionado]
 
-# Funciones Biológicas
+# --- FUNCIONES BIOLÓGICAS Y DE HERRAMIENTAS ---
 def obtener_secuencia_uniprot(uniprot_id):
     url = f"https://rest.uniprot.org/uniprotkb/{uniprot_id}.fasta"
     try:
@@ -110,6 +111,40 @@ def optimizar_con_dnachisel(secuencia_proteina, chasis_nombre):
     except:
         return None
 
+# NUEVA HERRAMIENTA: Conexión a UniProt para el Agente
+def buscar_herramienta_uniprot(compuesto):
+    """
+    Se conecta a la API de UniProt para buscar enzimas reales.
+    Esta es la 'herramienta' que usará la IA cuando no sepa la respuesta.
+    """
+    query_segura = urllib.parse.quote(f"{compuesto} AND reviewed:true AND existence:1")
+    url = f"https://rest.uniprot.org/uniprotkb/search?query={query_segura}&format=json&size=3"
+    
+    try:
+        req = urllib.request.Request(url, headers={'Accept': 'application/json'})
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            
+            resultados = []
+            for entry in data.get('results', []):
+                nombre_enzima = "Desconocido"
+                try:
+                    nombre_enzima = entry['proteinDescription']['recommendedName']['fullName']['value']
+                except KeyError:
+                    pass
+                
+                resultados.append({
+                    "UniProt_ID": entry['primaryAccession'],
+                    "Nombre_Enzima": nombre_enzima,
+                    "Organismo": entry.get('organism', {}).get('scientificName', 'Unknown')
+                })
+            
+            return json.dumps(resultados) if resultados else "No se encontraron enzimas en UniProt para este compuesto."
+            
+    except Exception as e:
+        return f"Error al consultar UniProt: {str(e)}"
+
+# --- SEGURIDAD E IA ---
 def sanitizar_input(texto):
     texto = texto[:50]
     texto_limpio = re.sub(r'[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ\s]', '', texto)
@@ -202,7 +237,7 @@ if st.button(t["btn"]):
                 # 1. Traducir la columna principal
                 df_mostrar['Residue'] = df_mostrar['Residue'].map(TRADUCCION_RESIDUOS_EN).fillna(df_mostrar['Residue'])
                 
-                # 2. Traducir los encabezados de las columnas
+                # 2. Traducir los encabezados
                 df_mostrar = df_mostrar.rename(columns={
                     "Key_Component": "Key Component",
                     "Suggested_Enzyme": "Suggested Enzyme",
@@ -211,15 +246,14 @@ if st.button(t["btn"]):
                     "Justification": "Justification"
                 })
                 
-                # 3. Traducir las palabras clave cortas (estas no fallan)
+                # 3. Traducir las palabras clave cortas
                 TRAD_CELDAS = {
                     "Pectina": "Pectin", "Pectinasa": "Pectinase", "Limoneno": "Limonene",
                     "Celulosa": "Cellulose", "Celulasa": "Cellulase", "Etanol": "Ethanol"
                 }
                 df_mostrar = df_mostrar.replace(TRAD_CELDAS)
                 
-                # 4. SOLUCIÓN ROBUSTA PARA LA JUSTIFICACIÓN
-                # Asignamos la frase en inglés directamente al residuo ya traducido
+                # 4. Traducción robusta de justificaciones
                 JUSTIFICACIONES_EN = {
                     "Orange Peel": "High conversion rate to limonene due to pectin richness.",
                     "Grape Pomace": "Optimal lignocellulosic profile for synthesizing advanced biofuels.",
@@ -227,19 +261,7 @@ if st.button(t["btn"]):
                     "Dairy Whey": "Lactose-rich medium perfect for engineered yeast chassis.",
                     "Coffee Husk": "Abundant source for valuable organic acid recovery."
                 }
-                
-                # Esto busca qué residuo está en la tabla y le pega su frase en inglés
                 df_mostrar['Justification'] = df_mostrar['Residue'].map(JUSTIFICACIONES_EN).fillna(df_mostrar['Justification'])
-                
-                # --- AQUÍ ESTÁ EL MINI-DICCIONARIO ACTUALIZADO ---
-                TRAD_CELDAS = {
-                    "Pectina": "Pectin", "Pectinasa": "Pectinase", "Limoneno": "Limonene",
-                    "Celulosa": "Cellulose", "Celulasa": "Cellulase", "Etanol": "Ethanol",
-                    # ⚠️ REEMPLAZA EL TEXTO DE ABAJO POR TU JUSTIFICACIÓN EXACTA DEL CSV
-                    "Alta t... (Tu texto original en español)": "High rate of... (Tu traducción al inglés)"
-                }
-                
-                df_mostrar = df_mostrar.replace(TRAD_CELDAS)
             
             st.dataframe(df_mostrar, hide_index=True)
             
